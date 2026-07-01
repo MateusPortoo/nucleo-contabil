@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { CheckCircle2, Zap, Building2, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
+import type { Faixa } from "@/lib/billing/planos";
 
 type BillingStatus = RouterOutputs["billing"]["status"];
 type Plano = BillingStatus["planos"][number];
 
-const ICONES: Record<string, React.ElementType> = {
+const ICONES: Record<Faixa, React.ElementType> = {
   ate10: Zap,
   ate25: Building2,
   ate50: Users,
@@ -23,13 +23,14 @@ export function BillingPage({ inicial }: { inicial: BillingStatus }) {
 
   const checkout = trpc.billing.iniciarCheckout.useMutation({
     onSuccess: ({ checkoutUrl }) => {
+      // H-5: URL já validada no servidor (domínio MP ou "/billing" no stub)
       window.location.href = checkoutUrl;
     },
   });
 
   const { assinatura, empresasAtivas, planos } = data;
   const faixaAtual = assinatura?.faixa;
-  const statusAtual = assinatura?.status ?? "pendente";
+  const statusAtual = assinatura?.status ?? ("pendente" as const);
   const limite = assinatura?.limiteEmpresas ?? 0;
   const pct = limite > 0 ? Math.round((empresasAtivas / limite) * 100) : 0;
 
@@ -68,12 +69,19 @@ export function BillingPage({ inicial }: { inicial: BillingStatus }) {
       </section>
 
       {/* cards de plano */}
+      {statusAtual === "pendente" && (
+        <p className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          Aguardando confirmação do pagamento… a página atualiza automaticamente.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {planos.map((plano) => (
           <PlanoCard
             key={plano.faixa}
             plano={plano}
             atual={faixaAtual === plano.faixa}
+            pagamentoPendente={statusAtual === "pendente"}
             loading={checkout.isPending && checkout.variables?.faixa === plano.faixa}
             onAssinar={() => checkout.mutate({ faixa: plano.faixa })}
           />
@@ -98,15 +106,17 @@ export function BillingPage({ inicial }: { inicial: BillingStatus }) {
 function PlanoCard({
   plano,
   atual,
+  pagamentoPendente,
   loading,
   onAssinar,
 }: {
   plano: Plano;
   atual: boolean;
+  pagamentoPendente: boolean;
   loading: boolean;
   onAssinar: () => void;
 }) {
-  const Icon = ICONES[plano.faixa] ?? Zap;
+  const Icon = ICONES[plano.faixa as Faixa];
 
   return (
     <article
@@ -142,7 +152,7 @@ function PlanoCard({
       </ul>
       <button
         type="button"
-        disabled={atual || loading}
+        disabled={atual || loading || pagamentoPendente}
         onClick={onAssinar}
         className={`mt-5 rounded-lg py-2.5 text-sm font-semibold transition-colors ${
           atual
@@ -150,7 +160,7 @@ function PlanoCard({
             : "bg-ink text-white hover:bg-ink/80 disabled:opacity-60"
         }`}
       >
-        {loading ? "Redirecionando…" : atual ? "Plano ativo" : "Assinar"}
+        {loading ? "Aguarde…" : atual ? "Plano ativo" : pagamentoPendente ? "Aguardando…" : "Assinar"}
       </button>
     </article>
   );
