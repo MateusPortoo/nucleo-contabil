@@ -12,14 +12,18 @@ export default {
       if (!auth?.user) return false;
       const papel = auth.user.papel as Papel;
       const path = request.nextUrl.pathname;
-      // Rotas de API do tRPC são protegidas pelo tenantProcedure — não redirecionar.
-      if (path.startsWith("/api/trpc")) return true;
+      // Rotas de API protegidas pelo tenantProcedure — não redirecionar.
+      if (path.startsWith("/api/trpc") || path.startsWith("/api/webhooks")) return true;
       // cliente → redireciona para /cliente se tentar acessar área do staff
       if (papel === "cliente" && !path.startsWith("/cliente")) {
         return Response.redirect(new URL("/cliente", request.nextUrl));
       }
       // staff → redireciona para / se tentar acessar portal do cliente
       if (papel !== "cliente" && path.startsWith("/cliente")) {
+        return Response.redirect(new URL("/", request.nextUrl));
+      }
+      // /billing é exclusivo do sócio
+      if (path.startsWith("/billing") && papel !== "socio") {
         return Response.redirect(new URL("/", request.nextUrl));
       }
       return true;
