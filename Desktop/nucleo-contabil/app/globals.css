@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Direção Swiss / precisão — light-first. Cor = semântica de status. */
+@theme {
+  --color-surface: #f6f6f4;
+  --color-panel: #ffffff;
+  --color-ink: #18181b;
+  --color-muted: #6b7280;
+  --color-line: #e7e7e3;
+  --color-accent: #1d4ed8;
+
+  /* status (verde entregue / âmbar pendente / azul classificação / violeta gerada / vermelho atrasada) */
+  --color-status-entregue: #15803d;
+  --color-status-pendente: #b45309;
+  --color-status-classificacao: #1d4ed8;
+  --color-status-gerada: #6d28d9;
+  --color-status-atrasada: #b91c1c;
+
+  --font-sans: "Satoshi", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* campo de formulário padrão */
+.input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 150ms;
+}
+.input:focus {
+  border-color: var(--color-ink);
+}
+
+/* valores monetários/numéricos sempre alinhados */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
