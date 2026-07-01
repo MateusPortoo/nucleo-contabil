@@ -6,6 +6,7 @@ import { FileText, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
 import type { Papel } from "@/lib/db/schema";
+import { TIPO_META } from "@/lib/documentos/tipo-meta";
 
 type Documento = RouterOutputs["documentos"]["listar"][number];
 type Empresa = RouterOutputs["empresas"]["listar"][number];
@@ -14,13 +15,6 @@ const MESES = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
   "Jul", "Ago", "Set", "Out", "Nov", "Dez",
 ];
-
-const TIPO_META: Record<string, { label: string; classe: string }> = {
-  nfe:     { label: "NF-e",    classe: "bg-blue-50 text-blue-700" },
-  extrato: { label: "Extrato", classe: "bg-green-50 text-green-700" },
-  recibo:  { label: "Recibo",  classe: "bg-yellow-50 text-yellow-700" },
-  outro:   { label: "Outro",   classe: "bg-line text-muted" },
-};
 
 type Props = {
   inicial: Documento[];

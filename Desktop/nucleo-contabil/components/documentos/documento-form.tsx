@@ -119,7 +119,13 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
           <input
             type="number"
             value={ano}
-            onChange={(e) => { setAno(Number(e.target.value)); setObrigacaoId(""); }}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (!Number.isNaN(v) && v >= 2020 && v <= 2100) {
+                setAno(v);
+                setObrigacaoId("");
+              }
+            }}
             min={2020}
             max={2100}
             required

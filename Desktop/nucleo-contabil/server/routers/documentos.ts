@@ -52,7 +52,8 @@ export const documentosRouter = router({
         })
         .from(documentos)
         .where(and(...filtros))
-        .orderBy(desc(documentos.criadoEm));
+        .orderBy(desc(documentos.criadoEm))
+        .limit(200); // evita varredura total sem filtro de competência
     }),
 
   enviar: tenantProcedure.input(enviarInput).mutation(async ({ ctx, input }) => {
