@@ -15,7 +15,7 @@ type NavItem =
 const NAV: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, href: "/" },
   { label: "Empresas", icon: Building2, href: "/empresas" },
-  { label: "Documentos", icon: FileText, href: null },
+  { label: "Documentos", icon: FileText, href: "/documentos" },
   { label: "Revisão IA", icon: Sparkles, href: "/classificacao" },
   { label: "Cobrança", icon: CreditCard, href: "/billing", somenteSocio: true },
 ];

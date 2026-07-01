@@ -65,4 +65,32 @@ export const obrigacoesRouter = router({
         atrasada: r.status !== "entregue" && r.prazo < hoje,
       }));
     }),
+
+  // Obrigações de uma empresa numa competência — usado no formulário de upload
+  listarPorEmpresaCompetencia: tenantProcedure
+    .input(z.object({ empresaId: z.string().uuid() }).merge(competenciaInput))
+    .query(async ({ ctx, input }) => {
+      // cliente só pode consultar a própria empresa
+      if (ctx.papel === "cliente" && input.empresaId !== ctx.empresaId) {
+        return [];
+      }
+      return db
+        .select({
+          id: obrigacoes.id,
+          tipoCodigo: tiposObrigacao.codigo,
+          tipoNome: tiposObrigacao.nome,
+          status: obrigacoes.status,
+        })
+        .from(obrigacoes)
+        .innerJoin(tiposObrigacao, eq(tiposObrigacao.id, obrigacoes.tipoObrigacaoId))
+        .where(
+          and(
+            eq(obrigacoes.escritorioId, ctx.escritorioId),
+            eq(obrigacoes.empresaId, input.empresaId),
+            eq(obrigacoes.competenciaAno, input.ano),
+            eq(obrigacoes.competenciaMes, input.mes),
+          ),
+        )
+        .orderBy(obrigacoes.prazo);
+    }),
 });
