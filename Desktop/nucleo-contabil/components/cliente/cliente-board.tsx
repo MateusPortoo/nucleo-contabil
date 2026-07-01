@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ListChecks } from "lucide-react";
 import { trpc } from "@/lib/trpc/react";
+import type { RouterOutputs } from "@/lib/trpc/react";
 import { STATUS_META, ORDEM_ESTAGIOS, MESES, formatPrazo } from "@/components/painel/status";
 
-type Competencia = { ano: number; mes: number };
+type Competencia = RouterOutputs["obrigacoes"]["competenciasDisponiveis"][number];
 
 export function ClienteBoard({ competencias }: { competencias: Competencia[] }) {
   const [sel, setSel] = useState<Competencia | null>(competencias[0] ?? null);
 
   const obrigacoes = trpc.obrigacoes.listarPorCompetencia.useQuery(
-    { ano: sel?.ano ?? 0, mes: sel?.mes ?? 0 },
+    { ano: sel?.ano ?? 2000, mes: sel?.mes ?? 1 },
     { enabled: !!sel },
   );
 
-  const rows = obrigacoes.data ?? [];
+  // Durante loading de nova competência, não mostrar dados stale nos KPIs
+  const rows = obrigacoes.isLoading ? [] : (obrigacoes.data ?? []);
   const total = rows.length;
   const atrasadas = rows.filter((r) => r.atrasada).length;
   const entregues = rows.filter((r) => r.status === "entregue").length;
