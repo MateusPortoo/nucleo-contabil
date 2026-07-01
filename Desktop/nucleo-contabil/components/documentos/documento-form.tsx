@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
+import type { Papel } from "@/lib/db/schema";
 import { tipoDocumentoEnum } from "@/lib/db/schema";
 
 type Empresa = RouterOutputs["empresas"]["listar"][number];
@@ -26,14 +27,15 @@ function isTipoDoc(v: string): v is TipoDoc {
 }
 
 function mensagemErro(err: { data?: { code?: string } | null; message: string }): string {
-  if (err.data?.code === "FORBIDDEN") return err.message;
+  if (err.data?.code === "FORBIDDEN") return "Você não tem permissão para realizar esta ação.";
+  if (err.data?.code === "NOT_FOUND") return "Empresa não encontrada.";
   return "Ocorreu um erro ao enviar o documento. Tente novamente.";
 }
 
 type Props = {
   empresas: Empresa[];
-  empresaFixa?: string; // empresaId pré-fixado (portal do cliente)
-  papel: string;
+  empresaFixa?: string;
+  papel: Papel;
 };
 
 export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
@@ -63,6 +65,10 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
     e.preventDefault();
     setErro(null);
     if (!empresaId) return;
+    if (!nomeArquivo.trim()) {
+      setErro("O nome do arquivo não pode estar em branco.");
+      return;
+    }
     enviar.mutate({
       empresaId,
       tipo,
@@ -77,7 +83,6 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      {/* empresa */}
       {isCliente ? (
         <div>
           <span className="text-sm font-medium text-ink">Empresa</span>
@@ -94,15 +99,12 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
             className="input"
           >
             {empresas.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.razaoSocial}
-              </option>
+              <option key={e.id} value={e.id}>{e.razaoSocial}</option>
             ))}
           </select>
         </Field>
       )}
 
-      {/* competência */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Mês *">
           <select
@@ -120,7 +122,7 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
             type="number"
             value={ano}
             onChange={(e) => {
-              const v = Number(e.target.value);
+              const v = parseInt(e.target.value, 10);
               if (!Number.isNaN(v) && v >= 2020 && v <= 2100) {
                 setAno(v);
                 setObrigacaoId("");
@@ -134,7 +136,6 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
         </Field>
       </div>
 
-      {/* tipo */}
       <Field label="Tipo *">
         <select
           value={tipo}
@@ -147,7 +148,6 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
         </select>
       </Field>
 
-      {/* nome do arquivo */}
       <Field label="Nome do arquivo *">
         <input
           type="text"
@@ -159,13 +159,12 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
         />
       </Field>
 
-      {/* obrigação vinculada (opcional) */}
       <Field label="Obrigação vinculada (opcional)">
         <select
           value={obrigacaoId}
           onChange={(e) => setObrigacaoId(e.target.value)}
           className="input"
-          disabled={obrigacoesDisp.length === 0}
+          disabled={obrigacoesQuery.isLoading || obrigacoesDisp.length === 0}
         >
           <option value="">— nenhuma —</option>
           {obrigacoesDisp.map((o) => (
@@ -174,7 +173,13 @@ export function DocumentoForm({ empresas, empresaFixa, papel }: Props) {
             </option>
           ))}
         </select>
-        {obrigacoesDisp.length === 0 && empresaId && (
+        {obrigacoesQuery.isLoading && (
+          <p className="mt-1 text-xs text-muted">Carregando obrigações…</p>
+        )}
+        {obrigacoesQuery.isError && (
+          <p className="mt-1 text-xs text-red-600">Erro ao carregar obrigações.</p>
+        )}
+        {!obrigacoesQuery.isLoading && !obrigacoesQuery.isError && obrigacoesDisp.length === 0 && empresaId && (
           <p className="mt-1 text-xs text-muted">
             Nenhuma obrigação encontrada para esta empresa/competência.
           </p>

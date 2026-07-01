@@ -158,6 +158,10 @@ export function ClienteBoard({ competencias }: { competencias: Competencia[] }) 
 
         {documentos.isLoading ? (
           <div className="h-16 animate-pulse rounded-lg border border-line bg-panel" />
+        ) : documentos.isError ? (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Erro ao carregar documentos.
+          </p>
         ) : docs.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line py-6 text-center text-sm text-muted">
             Nenhum documento enviado nesta competência.
@@ -174,7 +178,7 @@ export function ClienteBoard({ competencias }: { competencias: Competencia[] }) 
               </thead>
               <tbody className="divide-y divide-line">
                 {docs.map((doc) => {
-                  const meta = TIPO_META[doc.tipo] ?? TIPO_META.outro;
+                  const meta = TIPO_META[doc.tipo] ?? TIPO_META["outro"]!;
                   return (
                     <tr key={doc.id} className="bg-surface">
                       <td className="px-4 py-3">

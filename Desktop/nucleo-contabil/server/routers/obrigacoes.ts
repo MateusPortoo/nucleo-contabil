@@ -1,5 +1,7 @@
+import "server-only";
 import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { db } from "@/lib/db";
 import { obrigacoes, empresas, tiposObrigacao } from "@/lib/db/schema";
 import { router, tenantProcedure } from "../trpc";
@@ -70,9 +72,8 @@ export const obrigacoesRouter = router({
   listarPorEmpresaCompetencia: tenantProcedure
     .input(z.object({ empresaId: z.string().uuid() }).merge(competenciaInput))
     .query(async ({ ctx, input }) => {
-      // cliente só pode consultar a própria empresa
       if (ctx.papel === "cliente" && input.empresaId !== ctx.empresaId) {
-        return [];
+        throw new TRPCError({ code: "FORBIDDEN" });
       }
       return db
         .select({

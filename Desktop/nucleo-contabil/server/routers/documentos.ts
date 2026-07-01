@@ -3,7 +3,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { db } from "@/lib/db";
-import { documentos, obrigacoes, tipoDocumentoEnum } from "@/lib/db/schema";
+import { documentos, obrigacoes, empresas, tipoDocumentoEnum } from "@/lib/db/schema";
 import { router, tenantProcedure, comPapel } from "../trpc";
 
 const tipoDocumentoValues = tipoDocumentoEnum.enumValues;
@@ -29,7 +29,6 @@ export const documentosRouter = router({
     .query(async ({ ctx, input }) => {
       const filtros = [eq(documentos.escritorioId, ctx.escritorioId)];
 
-      // cliente só enxerga documentos da própria empresa
       if (ctx.papel === "cliente") {
         filtros.push(eq(documentos.empresaId, ctx.empresaId!));
       } else if (input.empresaId) {
@@ -53,11 +52,11 @@ export const documentosRouter = router({
         .from(documentos)
         .where(and(...filtros))
         .orderBy(desc(documentos.criadoEm))
-        .limit(200); // evita varredura total sem filtro de competência
+        .limit(200);
     }),
 
   enviar: tenantProcedure.input(enviarInput).mutation(async ({ ctx, input }) => {
-    // cliente só pode enviar para a própria empresa
+    // B-H1: cliente só pode enviar para a própria empresa
     if (ctx.papel === "cliente" && input.empresaId !== ctx.empresaId) {
       throw new TRPCError({
         code: "FORBIDDEN",
@@ -66,6 +65,15 @@ export const documentosRouter = router({
     }
 
     return db.transaction(async (tx) => {
+      // B-H1 fix: verifica ownership da empresa dentro da transaction
+      const [empresa] = await tx
+        .select({ id: empresas.id })
+        .from(empresas)
+        .where(and(eq(empresas.id, input.empresaId), eq(empresas.escritorioId, ctx.escritorioId)))
+        .limit(1);
+
+      if (!empresa) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada." });
+
       const [doc] = await tx
         .insert(documentos)
         .values({
@@ -81,7 +89,7 @@ export const documentosRouter = router({
 
       if (!doc) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // avança status somente de pendente_documentos → em_classificacao (não regride)
+      // B-H2 fix: filtra também por empresaId para não avançar obrigação alheia
       if (input.obrigacaoId) {
         await tx
           .update(obrigacoes)
@@ -90,6 +98,7 @@ export const documentosRouter = router({
             and(
               eq(obrigacoes.id, input.obrigacaoId),
               eq(obrigacoes.escritorioId, ctx.escritorioId),
+              eq(obrigacoes.empresaId, input.empresaId),
               eq(obrigacoes.status, "pendente_documentos"),
             ),
           );

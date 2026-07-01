@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/react";
@@ -29,7 +29,7 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
   const [filtroMes, setFiltroMes] = useState<number | undefined>(undefined);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
 
-  const { data: documentos, refetch } = trpc.documentos.listar.useQuery(
+  const { data: documentos, refetch, isError } = trpc.documentos.listar.useQuery(
     {
       empresaId: filtroEmpresaId || undefined,
       ano: filtroAno,
@@ -44,8 +44,14 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
   const podeExcluir = papel === "socio" || papel === "contador";
   const isStaff = papel !== "cliente";
 
+  // O(1) lookup: evita O(N×M) em cada render
+  const empresaMap = useMemo(
+    () => Object.fromEntries(empresas.map((e) => [e.id, e.nomeFantasia ?? e.razaoSocial])),
+    [empresas],
+  );
+
   function handleExcluir(id: string) {
-    if (confirmandoId === id) {
+    if (confirmandoId === id && !excluir.isPending) {
       excluir.mutate({ id });
       setConfirmandoId(null);
     } else {
@@ -53,36 +59,42 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
     }
   }
 
-  function nomeEmpresa(id: string) {
-    const e = empresas.find((emp) => emp.id === id);
-    return e?.nomeFantasia ?? e?.razaoSocial ?? id;
+  function handleFiltroEmpresa(val: string) {
+    setFiltroEmpresaId(val);
+    setConfirmandoId(null);
+  }
+
+  function handleFiltroMes(val: string) {
+    setFiltroMes(val ? Number(val) : undefined);
+    setConfirmandoId(null);
+  }
+
+  function handleFiltroAno(val: string) {
+    const v = parseInt(val, 10);
+    setFiltroAno(!Number.isNaN(v) && v >= 2020 && v <= 2100 ? v : undefined);
+    setConfirmandoId(null);
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {/* filtro empresa (só staff vê) */}
           {isStaff && (
             <select
               value={filtroEmpresaId}
-              onChange={(e) => setFiltroEmpresaId(e.target.value)}
+              onChange={(e) => handleFiltroEmpresa(e.target.value)}
               className="input h-9 py-0 text-sm"
             >
               <option value="">Todas as empresas</option>
               {empresas.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nomeFantasia ?? e.razaoSocial}
-                </option>
+                <option key={e.id} value={e.id}>{e.nomeFantasia ?? e.razaoSocial}</option>
               ))}
             </select>
           )}
 
-          {/* filtro mês */}
           <select
             value={filtroMes ?? ""}
-            onChange={(e) => setFiltroMes(e.target.value ? Number(e.target.value) : undefined)}
+            onChange={(e) => handleFiltroMes(e.target.value)}
             className="input h-9 py-0 text-sm"
           >
             <option value="">Todos os meses</option>
@@ -91,12 +103,11 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
             ))}
           </select>
 
-          {/* filtro ano */}
           <input
             type="number"
             placeholder={String(agora.getFullYear())}
             value={filtroAno ?? ""}
-            onChange={(e) => setFiltroAno(e.target.value ? Number(e.target.value) : undefined)}
+            onChange={(e) => handleFiltroAno(e.target.value)}
             className="input h-9 w-24 py-0 font-mono text-sm"
             min={2020}
             max={2100}
@@ -112,8 +123,16 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
         </Link>
       </div>
 
-      {/* empty state */}
-      {documentos.length === 0 && (
+      {isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Erro ao carregar documentos.{" "}
+          <button type="button" onClick={() => refetch()} className="underline">
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {!isError && documentos.length === 0 && (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-line py-16 text-center">
           <FileText className="size-10 text-muted/40" />
           <div>
@@ -123,10 +142,10 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
         </div>
       )}
 
-      {/* tabela */}
-      {documentos.length > 0 && (
+      {!isError && documentos.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-line">
           <table className="w-full text-sm">
+            <caption className="sr-only">Lista de documentos</caption>
             <thead>
               <tr className="border-b border-line bg-panel text-left text-xs font-semibold uppercase tracking-wide text-muted">
                 {isStaff && <th className="px-4 py-3">Empresa</th>}
@@ -140,11 +159,13 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
             </thead>
             <tbody className="divide-y divide-line">
               {documentos.map((doc) => {
-                const meta = TIPO_META[doc.tipo] ?? TIPO_META.outro;
+                const meta = TIPO_META[doc.tipo] ?? TIPO_META["outro"]!;
                 return (
                   <tr key={doc.id} className="bg-surface transition-colors hover:bg-panel/60">
                     {isStaff && (
-                      <td className="px-4 py-3 text-sm text-ink">{nomeEmpresa(doc.empresaId)}</td>
+                      <td className="px-4 py-3 text-sm text-ink">
+                        {empresaMap[doc.empresaId] ?? doc.empresaId}
+                      </td>
                     )}
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${meta.classe}`}>
@@ -175,6 +196,7 @@ export function DocumentosLista({ inicial, empresas, papel }: Props) {
                           type="button"
                           onClick={() => handleExcluir(doc.id)}
                           disabled={pendingId === doc.id}
+                          aria-label={`Excluir documento ${doc.nomeArquivo}`}
                           className={`flex items-center gap-1 rounded-md border px-3 py-1 text-xs transition-colors ${
                             confirmandoId === doc.id
                               ? "border-red-300 bg-red-50 text-red-700"
