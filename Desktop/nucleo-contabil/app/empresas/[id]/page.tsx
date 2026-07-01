@@ -1,8 +1,12 @@
 import { redirect, notFound } from "next/navigation";
+import { TRPCError } from "@trpc/server";
 import { auth } from "@/auth";
 import { getServerCaller } from "@/lib/trpc/server";
 import { AppShell } from "@/components/app-shell";
 import { EmpresaForm } from "@/components/empresas/empresa-form";
+import type { RouterOutputs } from "@/lib/trpc/react";
+
+type EmpresaRow = RouterOutputs["empresas"]["buscarPorId"];
 
 export default async function EditarEmpresaPage({
   params,
@@ -18,13 +22,15 @@ export default async function EditarEmpresaPage({
   const { id } = await params;
   const caller = await getServerCaller();
 
-  let empresa;
+  // HIGH-4 fix: apenas NOT_FOUND vira 404; outros erros sobem normalmente
+  let empresa: EmpresaRow | undefined;
   try {
     empresa = await caller.empresas.buscarPorId({ id });
-  } catch {
-    notFound();
+  } catch (err) {
+    if (err instanceof TRPCError && err.code === "NOT_FOUND") notFound();
+    throw err;
   }
-
+  if (!empresa) notFound();
   if (!empresa.ativa) redirect("/empresas");
 
   return (

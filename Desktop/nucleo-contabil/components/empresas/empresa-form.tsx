@@ -4,13 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
+import { regimeEnum } from "@/lib/db/schema";
 
 type Empresa = RouterOutputs["empresas"]["buscarPorId"];
+type Regime = (typeof regimeEnum.enumValues)[number];
 
-const REGIMES = [
+const REGIMES: { value: Regime; label: string }[] = [
   { value: "simples", label: "Simples Nacional" },
   { value: "presumido", label: "Lucro Presumido" },
-] as const;
+];
+
+// HIGH fix: type guard em vez de cast unsafe
+function isRegime(v: string): v is Regime {
+  return (regimeEnum.enumValues as readonly string[]).includes(v);
+}
 
 function aplicarMascaraCnpj(v: string) {
   return v
@@ -22,6 +29,13 @@ function aplicarMascaraCnpj(v: string) {
     .replace(/(\d{4})(\d)/, "$1-$2");
 }
 
+// MED-1 fix: mapeia código do tRPC para mensagem segura
+function mensagemErro(err: { data?: { code?: string } | null; message: string }): string {
+  if (err.data?.code === "FORBIDDEN") return err.message; // mensagens FORBIDDEN são controladas
+  if (err.data?.code === "CONFLICT") return "CNPJ já cadastrado neste escritório.";
+  return "Ocorreu um erro ao salvar. Tente novamente.";
+}
+
 type Props =
   | { modo: "criar"; empresa?: undefined }
   | { modo: "editar"; empresa: Empresa };
@@ -31,18 +45,16 @@ export function EmpresaForm({ modo, empresa }: Props) {
   const [razaoSocial, setRazaoSocial] = useState(empresa?.razaoSocial ?? "");
   const [nomeFantasia, setNomeFantasia] = useState(empresa?.nomeFantasia ?? "");
   const [cnpj, setCnpj] = useState(empresa?.cnpj ?? "");
-  const [regime, setRegime] = useState<"simples" | "presumido">(
-    empresa?.regimeTributario ?? "simples",
-  );
+  const [regime, setRegime] = useState<Regime>(empresa?.regimeTributario ?? "simples");
   const [erro, setErro] = useState<string | null>(null);
 
   const criar = trpc.empresas.criar.useMutation({
     onSuccess: () => router.push("/empresas"),
-    onError: (e) => setErro(e.message),
+    onError: (e) => setErro(mensagemErro(e)),
   });
   const editar = trpc.empresas.editar.useMutation({
     onSuccess: () => router.push("/empresas"),
-    onError: (e) => setErro(e.message),
+    onError: (e) => setErro(mensagemErro(e)),
   });
 
   const isPending = criar.isPending || editar.isPending;
@@ -50,7 +62,13 @@ export function EmpresaForm({ modo, empresa }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
-    const dados = { razaoSocial, nomeFantasia: nomeFantasia || undefined, cnpj, regimeTributario: regime };
+    const dados = {
+      razaoSocial,
+      // null → "" → undefined → null: conversão intencional para campo opcional
+      nomeFantasia: nomeFantasia.trim() || undefined,
+      cnpj,
+      regimeTributario: regime,
+    };
     if (modo === "criar") {
       criar.mutate(dados);
     } else {
@@ -96,7 +114,10 @@ export function EmpresaForm({ modo, empresa }: Props) {
       <Field label="Regime Tributário *">
         <select
           value={regime}
-          onChange={(e) => setRegime(e.target.value as "simples" | "presumido")}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (isRegime(v)) setRegime(v); // HIGH fix: runtime guard antes de setar
+          }}
           className="input"
         >
           {REGIMES.map((r) => (

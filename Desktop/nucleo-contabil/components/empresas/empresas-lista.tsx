@@ -5,10 +5,12 @@ import Link from "next/link";
 import { Building2, Plus, PowerOff } from "lucide-react";
 import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
+import type { Papel } from "@/lib/db/schema";
 
 type Empresa = RouterOutputs["empresas"]["listar"][number];
 
-const REGIME_LABEL: Record<string, string> = {
+// Record<Regime, string> garante exaustividade em compile-time
+const REGIME_LABEL: Record<"simples" | "presumido", string> = {
   simples: "Simples Nacional",
   presumido: "Lucro Presumido",
 };
@@ -18,7 +20,7 @@ export function EmpresasLista({
   papel,
 }: {
   inicial: RouterOutputs["empresas"]["listar"];
-  papel: string;
+  papel: Papel; // HIGH-3 fix: union type, não string
 }) {
   const { data: empresas, refetch } = trpc.empresas.listar.useQuery(undefined, {
     initialData: inicial,
@@ -29,6 +31,8 @@ export function EmpresasLista({
   });
 
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  // MEDIUM fix: rastreia qual empresa está sendo processada pelo pending
+  const pendingId = desativar.isPending ? desativar.variables?.id : null;
 
   const podeCriar = papel === "socio" || papel === "contador";
   const podeDesativar = papel === "socio";
@@ -104,7 +108,7 @@ export function EmpresasLista({
                 </td>
                 <td className="px-4 py-3 font-mono text-muted">{emp.cnpj}</td>
                 <td className="px-4 py-3 text-muted">
-                  {REGIME_LABEL[emp.regimeTributario] ?? emp.regimeTributario}
+                  {REGIME_LABEL[emp.regimeTributario]}
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -132,15 +136,19 @@ export function EmpresasLista({
                         <button
                           type="button"
                           onClick={() => handleDesativar(emp)}
-                          disabled={desativar.isPending}
+                          disabled={pendingId === emp.id}
                           className={`flex items-center gap-1 rounded-md border px-3 py-1 text-xs transition-colors ${
                             confirmandoId === emp.id
                               ? "border-red-300 bg-red-50 text-red-700"
                               : "border-line text-muted hover:text-red-600"
-                          }`}
+                          } disabled:opacity-50`}
                         >
                           <PowerOff className="size-3" />
-                          {confirmandoId === emp.id ? "Confirmar?" : "Desativar"}
+                          {pendingId === emp.id
+                            ? "Aguarde…"
+                            : confirmandoId === emp.id
+                              ? "Confirmar?"
+                              : "Desativar"}
                         </button>
                       )}
                     </div>

@@ -22,6 +22,7 @@ export async function gerarObrigacoesParaEmpresa({
   ano: number;
   mes: number;
 }) {
+  // tiposObrigacao é uma tabela global (sem escritorioId) — compartilhada entre todos os escritórios
   const tipos = await db.select().from(tiposObrigacao);
 
   const linhas = tipos
