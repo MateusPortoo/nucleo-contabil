@@ -8,7 +8,7 @@ import {
   Font,
 } from "@react-pdf/renderer";
 
-// Registra fontes system-safe para evitar dependência de arquivo externo
+// Desabilita hifenização automática — chamado no módulo, nunca no cliente (Node.js only)
 Font.registerHyphenationCallback((word) => [word]);
 
 const C = {
@@ -110,8 +110,9 @@ function formatDate(iso: string | null | undefined): string {
 
 function formatPrazo(prazo: string): string {
   const parts = prazo.split("-");
-  if (parts.length !== 3 || parts.some((p) => !p)) return prazo;
+  if (parts.length !== 3) return prazo;
   const [y, m, d] = parts;
+  if (!y || !m || !d || isNaN(Number(y)) || isNaN(Number(m)) || isNaN(Number(d))) return prazo;
   return `${d}/${m}/${y}`;
 }
 

@@ -35,10 +35,7 @@ export function BotaoRelatorio({ empresaId, ano, mes, label = "Exportar PDF" }: 
       });
 
       if (!res.ok) {
-        const body = await res.json().catch(() => {
-          console.warn("[relatorio] resposta não-JSON, status:", res.status);
-          return {};
-        });
+        const body = await res.json().catch(() => ({}));
         setErro((body as { error?: string }).error ?? "Erro ao gerar relatório.");
         return;
       }
@@ -56,7 +53,9 @@ export function BotaoRelatorio({ empresaId, ano, mes, label = "Exportar PDF" }: 
         a.href = url;
         const disposition = res.headers.get("Content-Disposition") ?? "";
         const match = disposition.match(/filename="([^"]+)"/);
-        a.download = match?.[1] ?? "relatorio.pdf";
+        // Sanitiza o filename do header: só ASCII imprimível, sem / e chars de controle
+        const rawName = match?.[1] ?? "relatorio.pdf";
+        a.download = rawName.replace(/[^\x20-\x7E]/g, "").replace(/[/\\]/g, "_") || "relatorio.pdf";
         document.body.appendChild(a);
         a.click();
         a.remove();

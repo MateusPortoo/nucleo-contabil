@@ -35,27 +35,28 @@ export async function GET(req: NextRequest) {
   const { empresaId, ano, mes } = parsed.data;
 
   // Cliente só pode gerar relatório da própria empresa
-  if (papel === "cliente" && empresaId !== sessionEmpresaId) {
+  // Null-check explícito: sessionEmpresaId pode ser null em sessões sem empresa vinculada
+  if (papel === "cliente" && (!sessionEmpresaId || empresaId !== sessionEmpresaId)) {
     return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
   }
 
-  // Verifica que a empresa pertence ao escritório (uma query; previne IDOR)
-  const [empresa] = await db
-    .select({ id: empresas.id, razaoSocial: empresas.razaoSocial, nomeFantasia: empresas.nomeFantasia })
-    .from(empresas)
-    .where(and(eq(empresas.id, empresaId), eq(empresas.escritorioId, escritorioId)))
-    .limit(1);
+  // Empresa + escritório em paralelo (empresa filtra por escritorioId — previne IDOR)
+  const [[empresa], [escritorio]] = await Promise.all([
+    db
+      .select({ id: empresas.id, razaoSocial: empresas.razaoSocial, nomeFantasia: empresas.nomeFantasia })
+      .from(empresas)
+      .where(and(eq(empresas.id, empresaId), eq(empresas.escritorioId, escritorioId)))
+      .limit(1),
+    db
+      .select({ nome: escritorios.nome })
+      .from(escritorios)
+      .where(eq(escritorios.id, escritorioId))
+      .limit(1),
+  ]);
 
   if (!empresa) {
     return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
   }
-
-  // Busca escritório para nome
-  const [escritorio] = await db
-    .select({ nome: escritorios.nome })
-    .from(escritorios)
-    .where(eq(escritorios.id, escritorioId))
-    .limit(1);
 
   // Busca obrigações da competência
   const hoje = new Date().toISOString().slice(0, 10);
@@ -78,14 +79,17 @@ export async function GET(req: NextRequest) {
       ),
     )
     .orderBy(obrigacoes.prazo)
-    .limit(500);
+    .limit(501); // sentinela: 501 detecta truncamento sem falso positivo no limite exato
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "Nenhuma obrigação encontrada para esta competência." }, { status: 404 });
   }
 
+  const truncated = rows.length > 500;
+  const rowsSliced = truncated ? rows.slice(0, 500) : rows;
+
   // Busca documentos em batch (evita N+1)
-  const obrigacaoIds = rows.map((r) => r.id);
+  const obrigacaoIds = rowsSliced.map((r) => r.id);
   const docs = await db
     .select({
       id: documentos.id,
@@ -114,7 +118,7 @@ export async function GET(req: NextRequest) {
     docsByObrig.set(d.obrigacaoId, list);
   }
 
-  const obrigacoesPDF: ObrigacaoPDF[] = rows.map((r) => ({
+  const obrigacoesPDF: ObrigacaoPDF[] = rowsSliced.map((r) => ({
     id: r.id,
     tipoCodigo: r.tipoCodigo,
     tipoNome: r.tipoNome,
@@ -139,13 +143,15 @@ export async function GET(req: NextRequest) {
     contadorNome,
     obrigacoes: obrigacoesPDF,
     geradoEm: new Date().toISOString(),
-  }) as ReactElement<DocumentProps>;
+  }) as ReactElement<DocumentProps>; // renderToBuffer exige DocumentProps; createElement retorna ReactElement<unknown>
 
   let nodeBuffer: Buffer;
   try {
     nodeBuffer = await renderToBuffer(pdf);
   } catch (err) {
-    console.error("[relatorio/pdf] renderToBuffer falhou", err);
+    // Não logar o objeto err bruto — pode conter dados da empresa
+    const msg = err instanceof Error ? err.message : "desconhecido";
+    console.error("[relatorio/pdf] renderToBuffer falhou:", msg);
     return NextResponse.json({ error: "Falha ao gerar o PDF. Tente novamente." }, { status: 500 });
   }
 
@@ -154,7 +160,15 @@ export async function GET(req: NextRequest) {
   }
 
   const buffer = new Uint8Array(nodeBuffer);
-  const nomeBase = empresa.razaoSocial.trim().replace(/\s+/g, "_").toLowerCase() || "empresa";
+
+  // Sanitiza para ASCII puro: remove acentos, aspas e chars de controle
+  const nomeBase = empresa.razaoSocial
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // decompõe acentos
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "_") // só alfanumérico + _ -
+    .replace(/_+/g, "_")
+    .toLowerCase()
+    || "empresa";
   const filename = `relatorio_${nomeBase}_${ano}_${String(mes).padStart(2, "0")}.pdf`;
 
   return new NextResponse(buffer, {
@@ -163,7 +177,8 @@ export async function GET(req: NextRequest) {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
-      ...(rows.length === 500 ? { "X-Truncated": "obrigacoes" } : {}),
+      "X-Content-Type-Options": "nosniff",
+      ...(truncated ? { "X-Truncated": "obrigacoes" } : {}),
     },
   });
 }
