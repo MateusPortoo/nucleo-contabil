@@ -32,7 +32,7 @@ export default async function ClientePage() {
 
   return (
     <PortalShell empresaNome={empresa.nome ?? "Empresa"}>
-      <ClienteBoard competencias={competencias} />
+      <ClienteBoard competencias={competencias} empresaId={session.user.empresaId} />
     </PortalShell>
   );
 }

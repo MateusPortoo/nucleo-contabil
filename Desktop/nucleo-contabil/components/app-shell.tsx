@@ -5,6 +5,7 @@ import {
   FileText,
   Sparkles,
   CreditCard,
+  BarChart3,
 } from "lucide-react";
 import { SignOutButton } from "./sign-out-button";
 
@@ -16,6 +17,7 @@ const NAV: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, href: "/" },
   { label: "Empresas", icon: Building2, href: "/empresas" },
   { label: "Documentos", icon: FileText, href: "/documentos" },
+  { label: "Relatórios", icon: BarChart3, href: "/relatorios" },
   { label: "Revisão IA", icon: Sparkles, href: "/classificacao" },
   { label: "Cobrança", icon: CreditCard, href: "/billing", somenteSocio: true },
 ];

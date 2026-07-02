@@ -7,10 +7,11 @@ import { trpc } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/react";
 import { STATUS_META, ORDEM_ESTAGIOS, MESES, formatPrazo } from "@/components/painel/status";
 import { TIPO_META } from "@/lib/documentos/tipo-meta";
+import { BotaoRelatorio } from "@/components/relatorios/botao-relatorio";
 
 type Competencia = RouterOutputs["obrigacoes"]["competenciasDisponiveis"][number];
 
-export function ClienteBoard({ competencias }: { competencias: Competencia[] }) {
+export function ClienteBoard({ competencias, empresaId }: { competencias: Competencia[]; empresaId: string }) {
   const [sel, setSel] = useState<Competencia | null>(competencias[0] ?? null);
 
   const obrigacoes = trpc.obrigacoes.listarPorCompetencia.useQuery(
@@ -37,7 +38,17 @@ export function ClienteBoard({ competencias }: { competencias: Competencia[] }) 
 
   return (
     <div className="flex flex-col gap-6">
-      {/* seletor de competência */}
+      {/* seletor de competência + botão relatório */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {sel && (
+          <BotaoRelatorio
+            empresaId={empresaId}
+            ano={sel.ano}
+            mes={sel.mes}
+            label="Relatório PDF"
+          />
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-muted">Competência</span>
         {competencias.map((c) => {
