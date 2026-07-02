@@ -10,6 +10,8 @@ type Props = {
   label?: string;
 };
 
+const TIMEOUT_MS = 30_000;
+
 export function BotaoRelatorio({ empresaId, ano, mes, label = "Exportar PDF" }: Props) {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -17,32 +19,58 @@ export function BotaoRelatorio({ empresaId, ano, mes, label = "Exportar PDF" }: 
   async function handleClick() {
     setErro(null);
     setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
     try {
       const params = new URLSearchParams({
         empresaId,
         ano: String(ano),
         mes: String(mes),
       });
-      const res = await fetch(`/api/relatorios/obrigacoes?${params.toString()}`);
+
+      const res = await fetch(`/api/relatorios/obrigacoes?${params.toString()}`, {
+        signal: controller.signal,
+      });
+
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        const body = await res.json().catch(() => {
+          console.warn("[relatorio] resposta não-JSON, status:", res.status);
+          return {};
+        });
         setErro((body as { error?: string }).error ?? "Erro ao gerar relatório.");
         return;
       }
+
       const blob = await res.blob();
+
+      if (blob.size === 0) {
+        setErro("O PDF gerado está vazio. Tente novamente.");
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? "relatorio.pdf";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      setErro("Falha de rede. Tente novamente.");
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        const disposition = res.headers.get("Content-Disposition") ?? "";
+        const match = disposition.match(/filename="([^"]+)"/);
+        a.download = match?.[1] ?? "relatorio.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setErro("O servidor demorou demais. Tente novamente.");
+      } else {
+        setErro("Falha de rede. Tente novamente.");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }

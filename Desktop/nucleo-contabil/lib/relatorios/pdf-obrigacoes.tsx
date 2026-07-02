@@ -109,7 +109,9 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 function formatPrazo(prazo: string): string {
-  const [y, m, d] = prazo.split("-");
+  const parts = prazo.split("-");
+  if (parts.length !== 3 || parts.some((p) => !p)) return prazo;
+  const [y, m, d] = parts;
   return `${d}/${m}/${y}`;
 }
 
@@ -146,14 +148,14 @@ export function RelatorioPDF({
   const total = obrigacoes.length;
   const entregues = obrigacoes.filter((o) => o.status === "entregue").length;
   const atrasadas = obrigacoes.filter((o) => o.atrasada).length;
-  const emAndamento = total - entregues - atrasadas;
+  const emAndamento = Math.max(0, total - entregues - atrasadas);
   const pct = total > 0 ? Math.round((entregues / total) * 100) : 0;
 
   const pctEntregue = total > 0 ? (entregues / total) * 100 : 0;
   const pctAtrasada = total > 0 ? (atrasadas / total) * 100 : 0;
   const pctAndamento = Math.max(0, 100 - pctEntregue - pctAtrasada);
 
-  const competenciaLabel = `${MESES[competenciaMes - 1]} / ${competenciaAno}`;
+  const competenciaLabel = `${MESES[competenciaMes - 1] ?? String(competenciaMes)} / ${competenciaAno}`;
   const obrigsComDocs = obrigacoes.filter((o) => o.documentos.length > 0);
 
   return (

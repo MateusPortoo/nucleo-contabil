@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     id: r.id,
     tipoCodigo: r.tipoCodigo,
     tipoNome: r.tipoNome,
-    prazo: r.prazo,
+    prazo: r.prazo.slice(0, 10), // garante YYYY-MM-DD sem hora
     status: r.status,
     atrasada: r.status !== "entregue" && r.prazo < hoje,
     documentos: (docsByObrig.get(r.id) ?? []).map((d) => ({
@@ -129,8 +129,6 @@ export async function GET(req: NextRequest) {
     })),
   }));
 
-  // Nome do contador: busca o usuário da sessão (já autenticado, sem query extra desnecessária)
-  // Usa o nome da sessão diretamente
   const contadorNome = usuarioNome ?? "Contador";
 
   const pdf = createElement(RelatorioPDF, {
@@ -143,11 +141,21 @@ export async function GET(req: NextRequest) {
     geradoEm: new Date().toISOString(),
   }) as ReactElement<DocumentProps>;
 
-  const nodeBuffer = await renderToBuffer(pdf);
-  // NextResponse aceita Uint8Array mas não Buffer diretamente no Edge runtime
-  const buffer = new Uint8Array(nodeBuffer);
+  let nodeBuffer: Buffer;
+  try {
+    nodeBuffer = await renderToBuffer(pdf);
+  } catch (err) {
+    console.error("[relatorio/pdf] renderToBuffer falhou", err);
+    return NextResponse.json({ error: "Falha ao gerar o PDF. Tente novamente." }, { status: 500 });
+  }
 
-  const filename = `relatorio_${empresa.razaoSocial.replace(/\s+/g, "_").toLowerCase()}_${ano}_${String(mes).padStart(2, "0")}.pdf`;
+  if (nodeBuffer.length === 0) {
+    return NextResponse.json({ error: "PDF gerado está vazio." }, { status: 500 });
+  }
+
+  const buffer = new Uint8Array(nodeBuffer);
+  const nomeBase = empresa.razaoSocial.trim().replace(/\s+/g, "_").toLowerCase() || "empresa";
+  const filename = `relatorio_${nomeBase}_${ano}_${String(mes).padStart(2, "0")}.pdf`;
 
   return new NextResponse(buffer, {
     status: 200,
@@ -155,6 +163,7 @@ export async function GET(req: NextRequest) {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
+      ...(rows.length === 500 ? { "X-Truncated": "obrigacoes" } : {}),
     },
   });
 }

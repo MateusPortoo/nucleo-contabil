@@ -89,9 +89,11 @@ export function RelatoriosView({ empresas, competencias }: Props) {
 
         <div className="flex items-center justify-between border-t border-line pt-4">
           <p className="text-xs text-muted">
-            {pronto
-              ? `${MESES[(mes ?? 1) - 1]} / ${ano} — ${empresas.find((e) => e.id === empresaId)?.nomeFantasia ?? empresas.find((e) => e.id === empresaId)?.razaoSocial ?? ""}`
-              : "Selecione empresa e competência para gerar o relatório."}
+            {(() => {
+              if (!pronto) return "Selecione empresa e competência para gerar o relatório.";
+              const emp = empresas.find((e) => e.id === empresaId);
+              return `${MESES[(mes ?? 1) - 1]} / ${ano} — ${emp?.nomeFantasia ?? emp?.razaoSocial ?? ""}`;
+            })()}
           </p>
           {pronto && (
             <BotaoRelatorio
